@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"joints-be/modules/session"
 	"joints-be/modules/session/dto"
+	"joints-be/modules/session/entity"
 	"joints-be/modules/session/repository"
 )
 
@@ -22,11 +22,11 @@ func NewSessionService(repo repository.SessionRepository) SessionService {
 }
 
 func (s *sessionServiceImpl) CreateSession(ctx context.Context, req dto.CreateSessionRequest) (*dto.SessionResponse, error) {
-	newSession := &session.Session{
+	newSession := &entity.Session{
 		Subject:  req.Subject,
 		Topic:    req.Topic,
 		Subtopic: req.Subtopic,
-		Status:   "active",
+		Status:   entity.SessionStatusActive,
 	}
 
 	if err := s.repo.Create(ctx, newSession); err != nil {
@@ -38,7 +38,7 @@ func (s *sessionServiceImpl) CreateSession(ctx context.Context, req dto.CreateSe
 		Subject:   newSession.Subject,
 		Topic:     newSession.Topic,
 		Subtopic:  newSession.Subtopic,
-		Status:    newSession.Status,
+		Status:    string(newSession.Status),
 		CreatedAt: newSession.CreatedAt,
 		UpdatedAt: newSession.UpdatedAt,
 	}, nil
@@ -55,9 +55,8 @@ func (s *sessionServiceImpl) GetSessionByID(ctx context.Context, id string) (*dt
 		Subject:   sess.Subject,
 		Topic:     sess.Topic,
 		Subtopic:  sess.Subtopic,
-		Status:    sess.Status,
+		Status:    string(sess.Status),
 		CreatedAt: sess.CreatedAt,
 		UpdatedAt: sess.UpdatedAt,
 	}, nil
 }
-
