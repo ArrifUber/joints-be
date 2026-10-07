@@ -10,6 +10,7 @@ import (
 
 	"joints-be/config"
 	sessionEntity "joints-be/modules/session/entity"
+	transcriptEntity "joints-be/modules/transcript/entity"
 )
 
 // ProvideDB registers *gorm.DB into the DI injector.
@@ -36,6 +37,7 @@ func ProvideDB(i *do.Injector) {
 		if cfg.AppEnv == "development" {
 			if err := db.AutoMigrate(
 				&sessionEntity.Session{},
+				&transcriptEntity.TranscriptChunk{},
 			); err != nil {
 				return nil, err
 			}

@@ -15,6 +15,8 @@ import (
 	"joints-be/config"
 	sessionController "joints-be/modules/session/controller"
 	sessionRoutes "joints-be/modules/session/routes"
+	transcriptController "joints-be/modules/transcript/controller"
+	transcriptRoutes "joints-be/modules/transcript/routes"
 	"joints-be/providers"
 )
 
@@ -31,15 +33,18 @@ func main() {
 	// 3. Build DI container
 	injector := do.New()
 
-	// Register providers
+	// Register providers (order matters: shared deps first)
 	providers.ProvideValidator(injector)
 	providers.ProvideDB(injector)
 	providers.ProvideSession(injector)
+	providers.ProvideTranscript(injector)
 
 	// 4. Resolve dependencies — fail fast if any provider errors
-	_, err := do.Invoke[*sessionController.SessionController](injector)
-	if err != nil {
-		log.Fatalf("[main] failed to initialize dependencies: %v", err)
+	if _, err := do.Invoke[*sessionController.SessionController](injector); err != nil {
+		log.Fatalf("[main] failed to initialize session dependencies: %v", err)
+	}
+	if _, err := do.Invoke[*transcriptController.TranscriptController](injector); err != nil {
+		log.Fatalf("[main] failed to initialize transcript dependencies: %v", err)
 	}
 
 	// 5. Setup Gin router
@@ -53,8 +58,11 @@ func main() {
 	// API v1 group
 	v1 := router.Group("/api/v1")
 	{
-		ctrl := do.MustInvoke[*sessionController.SessionController](injector)
-		sessionRoutes.RegisterSessionRoutes(v1, ctrl)
+		sessCtrl := do.MustInvoke[*sessionController.SessionController](injector)
+		sessionRoutes.RegisterSessionRoutes(v1, sessCtrl)
+
+		transCtrl := do.MustInvoke[*transcriptController.TranscriptController](injector)
+		transcriptRoutes.RegisterTranscriptRoutes(v1, transCtrl)
 	}
 
 	// 6. Create HTTP server
@@ -85,11 +93,9 @@ func main() {
 		log.Printf("[main] server forced to shutdown: %v", err)
 	}
 
-	// Shutdown DI container (closes DB connections, etc.)
 	if err := injector.Shutdown(); err != nil {
 		log.Printf("[main] error during DI container shutdown: %v", err)
 	}
 
 	log.Println("[main] server exited cleanly")
 }
-
