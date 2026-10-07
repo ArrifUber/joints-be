@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"joints-be/config"
+	contextEntity "joints-be/modules/context/entity"
 	sessionEntity "joints-be/modules/session/entity"
 	transcriptEntity "joints-be/modules/transcript/entity"
 )
@@ -38,6 +39,7 @@ func ProvideDB(i *do.Injector) {
 			if err := db.AutoMigrate(
 				&sessionEntity.Session{},
 				&transcriptEntity.TranscriptChunk{},
+				&contextEntity.ContextChunk{},
 			); err != nil {
 				return nil, err
 			}
