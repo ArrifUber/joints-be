@@ -16,9 +16,12 @@ func NewContextController(svc service.ContextService) *ContextController {
 	return &ContextController{service: svc}
 }
 
-// ListContexts handles GET /sessions/:sessionId/contexts
+// ListContexts handles GET /sessions/:id/contexts
 func (c *ContextController) ListContexts(ctx *gin.Context) {
-	sessionID := ctx.Param("sessionId")
+	sessionID := ctx.Param("id")
+	if sessionID == "" {
+		sessionID = ctx.Param("sessionId")
+	}
 
 	contexts, err := c.service.ListBySession(ctx.Request.Context(), sessionID)
 	if err != nil {

@@ -22,6 +22,9 @@ type TranscriptRepository interface {
 	// FindBySessionID returns all transcript chunks for a session ordered by sequence.
 	FindBySessionID(ctx context.Context, sessionID string) ([]entity.TranscriptChunk, error)
 
+	// FindRecentBySession returns up to `limit` recent transcript chunks up to `upToSequence` ordered by sequence ASC.
+	FindRecentBySession(ctx context.Context, sessionID string, upToSequence int64, limit int) ([]entity.TranscriptChunk, error)
+
 	// UpdateStatus updates the status of a transcript chunk by ID.
 	UpdateStatus(ctx context.Context, id string, status entity.TranscriptStatus) error
 }
@@ -63,6 +66,23 @@ func (r *transcriptRepositoryImpl) FindBySessionID(ctx context.Context, sessionI
 		Order("sequence ASC").
 		Find(&chunks).Error
 	return chunks, err
+}
+
+func (r *transcriptRepositoryImpl) FindRecentBySession(ctx context.Context, sessionID string, upToSequence int64, limit int) ([]entity.TranscriptChunk, error) {
+	var chunks []entity.TranscriptChunk
+	err := r.db.WithContext(ctx).
+		Where("session_id = ? AND sequence <= ?", sessionID, upToSequence).
+		Order("sequence DESC").
+		Limit(limit).
+		Find(&chunks).Error
+	if err != nil {
+		return nil, err
+	}
+	// Reverse chunks to chronological order (sequence ASC)
+	for i, j := 0, len(chunks)-1; i < j; i, j = i+1, j-1 {
+		chunks[i], chunks[j] = chunks[j], chunks[i]
+	}
+	return chunks, nil
 }
 
 func (r *transcriptRepositoryImpl) UpdateStatus(ctx context.Context, id string, status entity.TranscriptStatus) error {

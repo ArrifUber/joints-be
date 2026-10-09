@@ -15,10 +15,12 @@ import (
 	"joints-be/config"
 	contextController "joints-be/modules/context/controller"
 	contextRoutes "joints-be/modules/context/routes"
+	contextWorker "joints-be/modules/context/worker"
 	sessionController "joints-be/modules/session/controller"
 	sessionRoutes "joints-be/modules/session/routes"
 	transcriptController "joints-be/modules/transcript/controller"
 	transcriptRoutes "joints-be/modules/transcript/routes"
+	wsPkg "joints-be/pkg/websocket"
 	"joints-be/providers"
 )
 
@@ -36,6 +38,7 @@ func main() {
 	injector := do.New()
 	providers.ProvideValidator(injector)
 	providers.ProvideDB(injector)
+	providers.ProvideWebSocket(injector) // Provides Hub, EventPublisher, and wsHandler
 	providers.ProvideSession(injector)
 	providers.ProvideTranscript(injector)
 	providers.ProvideContextEngine(injector)
@@ -46,6 +49,8 @@ func main() {
 		func() error { _, err := do.Invoke[*sessionController.SessionController](injector); return err },
 		func() error { _, err := do.Invoke[*transcriptController.TranscriptController](injector); return err },
 		func() error { _, err := do.Invoke[*contextController.ContextController](injector); return err },
+		func() error { _, err := do.Invoke[*contextWorker.ContextWorker](injector); return err },
+		func() error { _, err := do.Invoke[*wsPkg.Handler](injector); return err },
 	} {
 		if err := resolve(); err != nil {
 			log.Fatalf("[main] failed to initialize dependencies: %v", err)
@@ -59,6 +64,11 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
+	// WebSocket endpoint for realtime context streaming (§16, §24)
+	wsHandler := do.MustInvoke[*wsPkg.Handler](injector)
+	router.GET("/ws/sessions/:id", wsHandler.HandleConnection)
+
+	// API v1 group
 	v1 := router.Group("/api/v1")
 	{
 		sessCtrl := do.MustInvoke[*sessionController.SessionController](injector)
@@ -84,20 +94,42 @@ func main() {
 		}
 	}()
 
-	// 7. Graceful shutdown
+	// 7. Start Context Background Worker
+	worker := do.MustInvoke[*contextWorker.ContextWorker](injector)
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	defer cancelWorker()
+
+	go worker.Start(workerCtx)
+
+	// 8. Graceful shutdown sequence (§43):
+	// SIGINT/SIGTERM -> Stop HTTP -> Stop Worker -> Close WebSocket -> Close DB -> Exit
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("[main] shutting down gracefully...")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("[main] forced shutdown: %v", err)
+	// 8.1 Stop accepting new HTTP requests
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("[main] forced HTTP shutdown: %v", err)
 	}
+
+	// 8.2 Stop background worker
+	log.Println("[main] stopping background worker...")
+	cancelWorker()
+
+	// 8.3 Close WebSocket connections
+	log.Println("[main] closing websocket connections...")
+	wsHub := do.MustInvoke[wsPkg.Hub](injector)
+	wsHub.Close()
+
+	// 8.4 Close DB and other DI resources
 	if err := injector.Shutdown(); err != nil {
 		log.Printf("[main] DI shutdown error: %v", err)
 	}
+
 	log.Println("[main] server exited cleanly")
 }

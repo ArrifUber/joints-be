@@ -7,21 +7,17 @@ import (
 	contextController "joints-be/modules/context/controller"
 	contextRepo "joints-be/modules/context/repository"
 	contextService "joints-be/modules/context/service"
+	contextWorker "joints-be/modules/context/worker"
 	sessionRepo "joints-be/modules/session/repository"
 	transcriptRepo "joints-be/modules/transcript/repository"
 	"joints-be/pkg/contextengine"
+	"joints-be/pkg/event"
 )
 
 // ProvideContextEngine registers the ContextEngine implementation.
-// Switch AI_PROVIDER in .env to change the provider (e.g. "mock", "gemini").
 func ProvideContextEngine(i *do.Injector) {
 	do.Provide(i, func(i *do.Injector) (contextengine.ContextEngine, error) {
-		// cfg := config.AppConfig
-		// switch cfg.AIProvider {
-		// case "gemini": return gemini.New(cfg.AIAPIKey), nil
-		// default:
 		return contextengine.NewMockContextEngine(), nil
-		// }
 	})
 }
 
@@ -37,12 +33,18 @@ func ProvideContext(i *do.Injector) {
 		sRepo := do.MustInvoke[sessionRepo.SessionRepository](i)
 		tRepo := do.MustInvoke[transcriptRepo.TranscriptRepository](i)
 		engine := do.MustInvoke[contextengine.ContextEngine](i)
-		return contextService.NewContextService(cRepo, sRepo, tRepo, engine), nil
+		publisher := do.MustInvoke[event.EventPublisher](i)
+		return contextService.NewContextService(cRepo, sRepo, tRepo, engine, publisher), nil
 	})
 
 	do.Provide(i, func(i *do.Injector) (*contextController.ContextController, error) {
 		svc := do.MustInvoke[contextService.ContextService](i)
 		return contextController.NewContextController(svc), nil
 	})
-}
 
+	do.Provide(i, func(i *do.Injector) (*contextWorker.ContextWorker, error) {
+		svc := do.MustInvoke[contextService.ContextService](i)
+		tRepo := do.MustInvoke[transcriptRepo.TranscriptRepository](i)
+		return contextWorker.NewContextWorker(svc, tRepo), nil
+	})
+}

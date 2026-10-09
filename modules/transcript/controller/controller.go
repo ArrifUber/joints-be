@@ -23,10 +23,13 @@ func NewTranscriptController(svc service.TranscriptService, validate *validator.
 	}
 }
 
-// CreateTranscript handles POST /sessions/:sessionId/transcripts
+// CreateTranscript handles POST /sessions/:id/transcripts
 // Returns 202 Accepted immediately after saving — never waits for AI processing.
 func (c *TranscriptController) CreateTranscript(ctx *gin.Context) {
-	sessionID := ctx.Param("sessionId")
+	sessionID := ctx.Param("id")
+	if sessionID == "" {
+		sessionID = ctx.Param("sessionId")
+	}
 
 	var req dto.CreateTranscriptRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -56,9 +59,12 @@ func (c *TranscriptController) CreateTranscript(ctx *gin.Context) {
 	ctx.JSON(http.StatusAccepted, response.Success("Transcript accepted", res))
 }
 
-// ListTranscripts handles GET /sessions/:sessionId/transcripts
+// ListTranscripts handles GET /sessions/:id/transcripts
 func (c *TranscriptController) ListTranscripts(ctx *gin.Context) {
-	sessionID := ctx.Param("sessionId")
+	sessionID := ctx.Param("id")
+	if sessionID == "" {
+		sessionID = ctx.Param("sessionId")
+	}
 
 	chunks, err := c.service.ListBySession(ctx.Request.Context(), sessionID)
 	if err != nil {

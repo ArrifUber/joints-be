@@ -6,7 +6,7 @@ import (
 )
 
 func RegisterContextRoutes(router *gin.RouterGroup, ctrl *controller.ContextController) {
-	contextRoutes := router.Group("/sessions/:sessionId/contexts")
+	contextRoutes := router.Group("/sessions/:id/contexts")
 	{
 		contextRoutes.GET("", ctrl.ListContexts)
 	}

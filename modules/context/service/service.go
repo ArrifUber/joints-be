@@ -13,6 +13,7 @@ import (
 	sessionRepo "joints-be/modules/session/repository"
 	transcriptRepo "joints-be/modules/transcript/repository"
 	"joints-be/pkg/contextengine"
+	"joints-be/pkg/event"
 )
 
 type ContextService interface {
@@ -29,6 +30,7 @@ type contextServiceImpl struct {
 	sessionRepo    sessionRepo.SessionRepository
 	transcriptRepo transcriptRepo.TranscriptRepository
 	engine         contextengine.ContextEngine
+	eventPublisher event.EventPublisher
 }
 
 func NewContextService(
@@ -36,12 +38,14 @@ func NewContextService(
 	sessionRepo sessionRepo.SessionRepository,
 	transcriptRepo transcriptRepo.TranscriptRepository,
 	engine contextengine.ContextEngine,
+	eventPublisher event.EventPublisher,
 ) ContextService {
 	return &contextServiceImpl{
 		contextRepo:    contextRepo,
 		sessionRepo:    sessionRepo,
 		transcriptRepo: transcriptRepo,
 		engine:         engine,
+		eventPublisher: eventPublisher,
 	}
 }
 
@@ -110,6 +114,21 @@ func (s *contextServiceImpl) ProcessTranscript(
 	}
 
 	log.Printf("[context] saved session_id=%s sequence=%d type=%s", sessionID, sequence, result.Type)
+
+	// Publish context_update event
+	if s.eventPublisher != nil {
+		ev := event.Event{
+			Event:     "context_update",
+			SessionID: sessionID,
+			Sequence:  sequence,
+			Timestamp: chunk.CreatedAt,
+			Data:      result,
+		}
+		if pubErr := s.eventPublisher.Publish(ctx, sessionID, ev); pubErr != nil {
+			log.Printf("[context] failed to publish event session_id=%s sequence=%d error=%v", sessionID, sequence, pubErr)
+		}
+	}
+
 	return chunk, nil
 }
 
